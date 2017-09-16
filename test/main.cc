@@ -37,8 +37,8 @@ void actor_params::set_defaults(void) {
 #else
       "test_tmpdb.mdbx";
 #endif
-  mode_flags = MDBX_NOSUBDIR | MDBX_WRITEMAP | MDBX_MAPASYNC | MDBX_NORDAHEAD |
-               MDBX_NOMEMINIT | MDBX_COALESCE | MDBX_LIFORECLAIM;
+  mode_flags = MDBX_WRITEMAP | MDBX_MAPASYNC | MDBX_NORDAHEAD | MDBX_NOMEMINIT |
+               MDBX_COALESCE | MDBX_LIFORECLAIM;
   table_flags = MDBX_DUPSORT;
   size = 1024 * 1024 * 4;
 
@@ -83,7 +83,7 @@ namespace global {
 
 std::vector<actor_config> actors;
 std::unordered_map<unsigned, actor_config *> events;
-std::unordered_map<mdbx_pid_t, actor_config *> pid2actor;
+std::unordered_map<MDBX_pid_t, actor_config *> pid2actor;
 std::set<std::string> databases;
 unsigned nactors;
 chrono::time start_motonic;
@@ -197,7 +197,7 @@ int main(int argc, char *const argv[]) {
       continue;
     if (config::parse_option(argc, argv, narg, "keylen.max", params.keylen_max,
                              config::no_scale, params.keylen_min,
-                             mdbx_get_maxkeysize(0)))
+                             mdbx_pagesize2maxkeylen(0)))
       continue;
     if (config::parse_option(argc, argv, narg, "datalen.min",
                              params.datalen_min, config::no_scale, 0,
@@ -320,7 +320,7 @@ int main(int argc, char *const argv[]) {
     log_trace("<< osal_setup");
 
     for (auto &a : global::actors) {
-      mdbx_pid_t pid;
+      MDBX_pid_t pid;
       log_trace(">> actor_start");
       int rc = osal_actor_start(a, pid);
       log_trace("<< actor_start");
@@ -354,7 +354,7 @@ int main(int argc, char *const argv[]) {
         timeout_seconds_left = left_motonic.seconds();
       }
 
-      mdbx_pid_t pid;
+      MDBX_pid_t pid;
       int rc = osal_actor_poll(pid, timeout_seconds_left);
       if (rc)
         failure("Poll error: %s (%d)\n", test_strerror(rc), rc);

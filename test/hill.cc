@@ -29,7 +29,7 @@ bool testcase_hill::run() {
   db_open();
 
   txn_begin(false);
-  MDBX_dbi dbi = db_table_open(true);
+  MDBX_aah aah = db_table_open(true);
   txn_end(false);
 
   /* LY: тест "холмиком":
@@ -62,10 +62,10 @@ bool testcase_hill::run() {
   keygen::buffer b_data = keygen::alloc(config.params.datalen_max);
 
   const unsigned insert_flags = (config.params.table_flags & MDBX_DUPSORT)
-                                    ? MDBX_NODUPDATA
-                                    : MDBX_NODUPDATA | MDBX_NOOVERWRITE;
+                                    ? MDBX_IUD_NODUP
+                                    : MDBX_IUD_NODUP | MDBX_IUD_NOOVERWRITE;
   const unsigned update_flags =
-      MDBX_CURRENT | MDBX_NODUPDATA | MDBX_NOOVERWRITE;
+      MDBX_IUD_CURRENT | MDBX_IUD_NODUP | MDBX_IUD_NOOVERWRITE;
 
   uint64_t serial_count = 0;
   unsigned txn_nops = 0;
@@ -85,7 +85,7 @@ bool testcase_hill::run() {
     log_trace("uphill: insert-a (age %" PRIu64 ") %" PRIu64, age_shift,
               a_serial);
     generate_pair(a_serial, a_key, a_data_1, age_shift);
-    int rc = mdbx_put(txn_guard.get(), dbi, &a_key->value, &a_data_1->value,
+    int rc = mdbx_put(txn_guard.get(), aah, &a_key->value, &a_data_1->value,
                       insert_flags);
     if (unlikely(rc != MDBX_SUCCESS))
       failure_perror("mdbx_put(insert-a.1)", rc);
@@ -98,7 +98,7 @@ bool testcase_hill::run() {
     // создаем вторую запись из пары
     log_trace("uphill: insert-b %" PRIu64, b_serial);
     generate_pair(b_serial, b_key, b_data, 0);
-    rc = mdbx_put(txn_guard.get(), dbi, &b_key->value, &b_data->value,
+    rc = mdbx_put(txn_guard.get(), aah, &b_key->value, &b_data->value,
                   insert_flags);
     if (unlikely(rc != MDBX_SUCCESS))
       failure_perror("mdbx_put(insert-b)", rc);
@@ -112,7 +112,7 @@ bool testcase_hill::run() {
     log_trace("uphill: update-a (age %" PRIu64 "->0) %" PRIu64, age_shift,
               a_serial);
     generate_pair(a_serial, a_key, a_data_0, 0);
-    rc = mdbx_replace(txn_guard.get(), dbi, &a_key->value, &a_data_0->value,
+    rc = mdbx_replace(txn_guard.get(), aah, &a_key->value, &a_data_0->value,
                       &a_data_1->value, update_flags);
     if (unlikely(rc != MDBX_SUCCESS))
       failure_perror("mdbx_put(update-a: 1->0)", rc);
@@ -124,7 +124,7 @@ bool testcase_hill::run() {
 
     // удаляем вторую запись
     log_trace("uphill: delete-b %" PRIu64, b_serial);
-    rc = mdbx_del(txn_guard.get(), dbi, &b_key->value, &b_data->value);
+    rc = mdbx_del(txn_guard.get(), aah, &b_key->value, &b_data->value);
     if (unlikely(rc != MDBX_SUCCESS))
       failure_perror("mdbx_del(b)", rc);
 
@@ -158,7 +158,7 @@ bool testcase_hill::run() {
     generate_pair(a_serial, a_key, a_data_1, age_shift);
     if (a_serial == 808)
       log_trace("!!!");
-    int rc = mdbx_replace(txn_guard.get(), dbi, &a_key->value, &a_data_1->value,
+    int rc = mdbx_replace(txn_guard.get(), aah, &a_key->value, &a_data_1->value,
                           &a_data_0->value, update_flags);
     if (unlikely(rc != MDBX_SUCCESS))
       failure_perror("mdbx_put(update-a: 0->1)", rc);
@@ -171,7 +171,7 @@ bool testcase_hill::run() {
     // создаем вторую запись из пары
     log_trace("downhill: insert-b %" PRIu64, b_serial);
     generate_pair(b_serial, b_key, b_data, 0);
-    rc = mdbx_put(txn_guard.get(), dbi, &b_key->value, &b_data->value,
+    rc = mdbx_put(txn_guard.get(), aah, &b_key->value, &b_data->value,
                   insert_flags);
     if (unlikely(rc != MDBX_SUCCESS))
       failure_perror("mdbx_put(insert-b)", rc);
@@ -184,7 +184,7 @@ bool testcase_hill::run() {
     // удаляем первую запись
     log_trace("downhill: delete-a (age %" PRIu64 ") %" PRIu64, age_shift,
               a_serial);
-    rc = mdbx_del(txn_guard.get(), dbi, &a_key->value, &a_data_1->value);
+    rc = mdbx_del(txn_guard.get(), aah, &a_key->value, &a_data_1->value);
     if (unlikely(rc != MDBX_SUCCESS))
       failure_perror("mdbx_del(a)", rc);
 
@@ -195,7 +195,7 @@ bool testcase_hill::run() {
 
     // удаляем вторую запись
     log_trace("downhill: delete-b %" PRIu64, b_serial);
-    rc = mdbx_del(txn_guard.get(), dbi, &b_key->value, &b_data->value);
+    rc = mdbx_del(txn_guard.get(), aah, &b_key->value, &b_data->value);
     if (unlikely(rc != MDBX_SUCCESS))
       failure_perror("mdbx_del(b)", rc);
 
@@ -210,13 +210,13 @@ bool testcase_hill::run() {
   if (txn_guard)
     txn_end(false);
 
-  if (dbi) {
+  if (aah) {
     if (config.params.drop_table && !mode_readonly()) {
       txn_begin(false);
-      db_table_drop(dbi);
+      db_table_drop(aah);
       txn_end(false);
     } else
-      db_table_close(dbi);
+      db_table_close(aah);
   }
   return true;
 }

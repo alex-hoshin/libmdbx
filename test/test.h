@@ -35,7 +35,7 @@ namespace global {
 extern const char thunk_param_prefix[];
 extern std::vector<actor_config> actors;
 extern std::unordered_map<unsigned, actor_config *> events;
-extern std::unordered_map<mdbx_pid_t, actor_config *> pid2actor;
+extern std::unordered_map<MDBX_pid_t, actor_config *> pid2actor;
 extern std::set<std::string> databases;
 extern unsigned nactors;
 extern chrono::time start_motonic;
@@ -55,15 +55,15 @@ extern bool progress_indicator;
 
 //-----------------------------------------------------------------------------
 
-struct db_deleter : public std::unary_function<void, MDBX_env *> {
-  void operator()(MDBX_env *env) const { mdbx_env_close(env); }
+struct db_deleter : public std::unary_function<void, MDBX_milieu *> {
+  void operator()(MDBX_milieu *bk) const { mdbx_bk_shutdown(bk); }
 };
 
 struct txn_deleter : public std::unary_function<void, MDBX_txn *> {
   void operator()(MDBX_txn *txn) const {
-    int rc = mdbx_txn_abort(txn);
+    int rc = mdbx_tn_abort(txn);
     if (rc)
-      log_trouble(mdbx_func_, "mdbx_txn_abort()", rc);
+      log_trouble(mdbx_func_, "mdbx_tn_abort()", rc);
   }
 };
 
@@ -71,7 +71,7 @@ struct cursor_deleter : public std::unary_function<void, MDBX_cursor *> {
   void operator()(MDBX_cursor *cursor) const { mdbx_cursor_close(cursor); }
 };
 
-typedef std::unique_ptr<MDBX_env, db_deleter> scoped_db_guard;
+typedef std::unique_ptr<MDBX_milieu, db_deleter> scoped_db_guard;
 typedef std::unique_ptr<MDBX_txn, txn_deleter> scoped_txn_guard;
 typedef std::unique_ptr<MDBX_cursor, cursor_deleter> scoped_cursor_guard;
 
@@ -80,7 +80,7 @@ typedef std::unique_ptr<MDBX_cursor, cursor_deleter> scoped_cursor_guard;
 class testcase {
 protected:
   const actor_config &config;
-  const mdbx_pid_t pid;
+  const MDBX_pid_t pid;
 
   scoped_db_guard db_guard;
   scoped_txn_guard txn_guard;
@@ -94,12 +94,12 @@ protected:
   keygen::maker keyvalue_maker;
 
   struct {
-    mdbx_canary canary;
+    MDBX_canary_t canary;
     mutable chrono::time progress_timestamp;
   } last;
 
-  static int oom_callback(MDBX_env *env, int pid, mdbx_tid_t tid, uint64_t txn,
-                          unsigned gap, int retry);
+  static int RBR_callback(MDBX_milieu *bk, int pid, MDBX_tid_t tid,
+                          uint64_t txn, unsigned gap, int retry);
 
   void db_prepare();
   void db_open();
@@ -111,9 +111,9 @@ protected:
   void update_canary(uint64_t increment);
   void kick_progress(bool active) const;
 
-  MDBX_dbi db_table_open(bool create);
-  void db_table_drop(MDBX_dbi handle);
-  void db_table_close(MDBX_dbi handle);
+  MDBX_aah db_table_open(bool create);
+  void db_table_drop(MDBX_aah handle);
+  void db_table_close(MDBX_aah handle);
 
   bool wait4start();
   void report(size_t nops_done);
@@ -135,7 +135,7 @@ protected:
   }
 
 public:
-  testcase(const actor_config &config, const mdbx_pid_t pid)
+  testcase(const actor_config &config, const MDBX_pid_t pid)
       : config(config), pid(pid), signalled(false), nops_completed(0) {
     start_timestamp.reset();
     memset(&last, 0, sizeof(last));
@@ -151,7 +151,7 @@ class testcase_hill : public testcase {
   typedef testcase inherited;
 
 public:
-  testcase_hill(const actor_config &config, const mdbx_pid_t pid)
+  testcase_hill(const actor_config &config, const MDBX_pid_t pid)
       : testcase(config, pid) {}
   bool setup();
   bool run();
@@ -162,7 +162,7 @@ class testcase_deadread : public testcase {
   typedef testcase inherited;
 
 public:
-  testcase_deadread(const actor_config &config, const mdbx_pid_t pid)
+  testcase_deadread(const actor_config &config, const MDBX_pid_t pid)
       : testcase(config, pid) {}
   bool setup();
   bool run();
@@ -173,7 +173,7 @@ class testcase_deadwrite : public testcase {
   typedef testcase inherited;
 
 public:
-  testcase_deadwrite(const actor_config &config, const mdbx_pid_t pid)
+  testcase_deadwrite(const actor_config &config, const MDBX_pid_t pid)
       : testcase(config, pid) {}
   bool setup();
   bool run();
@@ -184,7 +184,7 @@ class testcase_jitter : public testcase {
   typedef testcase inherited;
 
 public:
-  testcase_jitter(const actor_config &config, const mdbx_pid_t pid)
+  testcase_jitter(const actor_config &config, const MDBX_pid_t pid)
       : testcase(config, pid) {}
   bool setup();
   bool run();

@@ -66,7 +66,7 @@ static void dumpbyte(unsigned char c) {
   putchar(hexc[c & 0xf]);
 }
 
-static void text(MDBX_val *v) {
+static void text(MDBX_iov *v) {
   unsigned char *c, *end;
 
   putchar(' ');
@@ -84,7 +84,7 @@ static void text(MDBX_val *v) {
   putchar('\n');
 }
 
-static void dumpval(MDBX_val *v) {
+static void dumpval(MDBX_iov *v) {
   unsigned char *c, *end;
 
   putchar(' ');
@@ -97,23 +97,23 @@ static void dumpval(MDBX_val *v) {
 }
 
 /* Dump in BDB-compatible format */
-static int dumpit(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
+static int dumpit(MDBX_txn *txn, MDBX_aah aah, char *name) {
   MDBX_cursor *mc;
-  MDBX_stat ms;
-  MDBX_val key, data;
-  MDBX_envinfo info;
+  MDBX_aa_info ms;
+  MDBX_iov key, data;
+  MDBX_milieu_info info;
   unsigned int flags;
   int rc, i;
 
-  rc = mdbx_dbi_flags(txn, dbi, &flags);
+  rc = mdbx_aa_flags(txn, aah, &flags);
   if (rc)
     return rc;
 
-  rc = mdbx_dbi_stat(txn, dbi, &ms, sizeof(ms));
+  rc = mdbx_aa_info(txn, aah, &ms, sizeof(ms));
   if (rc)
     return rc;
 
-  rc = mdbx_env_info(mdbx_txn_env(txn), &info, sizeof(info));
+  rc = mdbx_bk_info(mdbx_tn_book(txn), &info, sizeof(info));
   if (rc)
     return rc;
 
@@ -122,8 +122,8 @@ static int dumpit(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
   if (name)
     printf("database=%s\n", name);
   printf("type=btree\n");
-  printf("mapsize=%" PRIu64 "\n", info.mi_mapsize);
-  printf("maxreaders=%u\n", info.mi_maxreaders);
+  printf("mapsize=%" PRIu64 "\n", info.bi_mapsize);
+  printf("maxreaders=%u\n", info.bi_maxreaders);
 
   for (i = 0; dbflags[i].bit; i++)
     if (flags & dbflags[i].bit)
@@ -132,7 +132,7 @@ static int dumpit(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
   printf("db_pagesize=%d\n", ms.ms_psize);
   printf("HEADER=END\n");
 
-  rc = mdbx_cursor_open(txn, dbi, &mc);
+  rc = mdbx_cursor_open(txn, aah, &mc);
   if (rc)
     return rc;
 
@@ -165,9 +165,9 @@ static void usage(char *prog) {
 
 int main(int argc, char *argv[]) {
   int i, rc;
-  MDBX_env *env;
+  MDBX_milieu *bk;
   MDBX_txn *txn;
-  MDBX_dbi dbi;
+  MDBX_aah aah;
   char *prog = argv[0];
   char *envname;
   char *subname = NULL;
@@ -177,13 +177,13 @@ int main(int argc, char *argv[]) {
     usage(prog);
   }
 
-  /* -a: dump main DB and all subDBs
-   * -s: dump only the named subDB
+  /* -a: dump main AA and all subAAs
+   * -s: dump only the named subAA
    * -n: use NOSUBDIR flag on env_open
    * -p: use printable characters
    * -f: write to file instead of stdout
    * -V: print version and exit
-   * (default) dump only the main DB
+   * (default) dump only the main AA
    */
   while ((i = getopt(argc, argv, "af:lnps:V")) != EOF) {
     switch (i) {
@@ -207,7 +207,7 @@ int main(int argc, char *argv[]) {
       }
       break;
     case 'n':
-      envflags |= MDBX_NOSUBDIR;
+      /* silently ignore for compatibility (MDB_NOSUBDIR option) */
       break;
     case 'p':
       mode |= PRINT;
@@ -239,32 +239,32 @@ int main(int argc, char *argv[]) {
 #endif /* !WINDOWS */
 
   envname = argv[optind];
-  rc = mdbx_env_create(&env);
+  rc = mdbx_bk_init(&bk);
   if (rc) {
-    fprintf(stderr, "mdbx_env_create failed, error %d %s\n", rc,
+    fprintf(stderr, "mdbx_bk_init failed, error %d %s\n", rc,
             mdbx_strerror(rc));
     return EXIT_FAILURE;
   }
 
   if (alldbs || subname) {
-    mdbx_env_set_maxdbs(env, 2);
+    mdbx_set_max_handles(bk, 2);
   }
 
-  rc = mdbx_env_open(env, envname, envflags | MDBX_RDONLY, 0664);
+  rc = mdbx_bk_open(bk, envname, envflags | MDBX_RDONLY, 0664);
   if (rc) {
-    fprintf(stderr, "mdbx_env_open failed, error %d %s\n", rc,
+    fprintf(stderr, "mdbx_bk_open failed, error %d %s\n", rc,
             mdbx_strerror(rc));
     goto env_close;
   }
 
-  rc = mdbx_txn_begin(env, NULL, MDBX_RDONLY, &txn);
+  rc = mdbx_tn_begin(bk, NULL, MDBX_RDONLY, &txn);
   if (rc) {
-    fprintf(stderr, "mdbx_txn_begin failed, error %d %s\n", rc,
+    fprintf(stderr, "mdbx_tn_begin failed, error %d %s\n", rc,
             mdbx_strerror(rc));
     goto env_close;
   }
 
-  rc = mdbx_dbi_open(txn, subname, 0, &dbi);
+  rc = mdbx_aa_open(txn, subname, 0, &aah, NULL, NULL);
   if (rc) {
     fprintf(stderr, "mdbx_open failed, error %d %s\n", rc, mdbx_strerror(rc));
     goto txn_abort;
@@ -272,10 +272,10 @@ int main(int argc, char *argv[]) {
 
   if (alldbs) {
     MDBX_cursor *cursor;
-    MDBX_val key;
+    MDBX_iov key;
     int count = 0;
 
-    rc = mdbx_cursor_open(txn, dbi, &cursor);
+    rc = mdbx_cursor_open(txn, aah, &cursor);
     if (rc) {
       fprintf(stderr, "mdbx_cursor_open failed, error %d %s\n", rc,
               mdbx_strerror(rc));
@@ -287,14 +287,14 @@ int main(int argc, char *argv[]) {
         break;
       }
       char *str;
-      MDBX_dbi db2;
+      MDBX_aah db2;
       if (memchr(key.iov_base, '\0', key.iov_len))
         continue;
       count++;
       str = malloc(key.iov_len + 1);
       memcpy(str, key.iov_base, key.iov_len);
       str[key.iov_len] = '\0';
-      rc = mdbx_dbi_open(txn, str, 0, &db2);
+      rc = mdbx_aa_open(txn, str, 0, &db2, NULL, NULL);
       if (rc == MDBX_SUCCESS) {
         if (list) {
           printf("%s\n", str);
@@ -304,7 +304,7 @@ int main(int argc, char *argv[]) {
           if (rc)
             break;
         }
-        mdbx_dbi_close(env, db2);
+        mdbx_aa_close(bk, db2);
       }
       free(str);
       if (rc)
@@ -320,16 +320,16 @@ int main(int argc, char *argv[]) {
       rc = MDBX_SUCCESS;
     }
   } else {
-    rc = dumpit(txn, dbi, subname);
+    rc = dumpit(txn, aah, subname);
   }
   if (rc && rc != MDBX_NOTFOUND)
     fprintf(stderr, "%s: %s: %s\n", prog, envname, mdbx_strerror(rc));
 
-  mdbx_dbi_close(env, dbi);
+  mdbx_aa_close(bk, aah);
 txn_abort:
-  mdbx_txn_abort(txn);
+  mdbx_tn_abort(txn);
 env_close:
-  mdbx_env_close(env);
+  mdbx_bk_shutdown(bk);
 
   return rc ? EXIT_FAILURE : EXIT_SUCCESS;
 }

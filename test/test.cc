@@ -91,13 +91,13 @@ static void mdbx_logger(int type, const char *function, int line,
     abort();
 }
 
-int testcase::oom_callback(MDBX_env *env, int pid, mdbx_tid_t tid, uint64_t txn,
-                           unsigned gap, int retry) {
+int testcase::RBR_callback(MDBX_milieu *bk, int pid, MDBX_tid_t tid,
+                           uint64_t txn, unsigned gap, int retry) {
 
-  testcase *self = (testcase *)mdbx_env_get_userctx(env);
+  testcase *self = (testcase *)mdbx_get_userctx(bk);
 
   if (retry == 0)
-    log_notice("oom_callback: waitfor pid %u, thread %" PRIuPTR
+    log_notice("RBR_callback: waitfor pid %u, thread %" PRIuPTR
                ", txn #%" PRIu64 ", gap %d",
                pid, (size_t)tid, txn, gap);
 
@@ -120,36 +120,36 @@ void testcase::db_prepare() {
     mdbx_dbg_opts |= MDBX_DBG_TRACE;
   if (config.params.loglevel <= logging::verbose)
     mdbx_dbg_opts |= MDBX_DBG_PRINT;
-  int rc = mdbx_setup_debug(mdbx_dbg_opts, mdbx_logger);
+  int rc = mdbx_set_debug(mdbx_dbg_opts, mdbx_logger);
   log_info("set mdbx debug-opts: 0x%02x", rc);
 
-  MDBX_env *env = nullptr;
-  rc = mdbx_env_create(&env);
+  MDBX_milieu *bk = nullptr;
+  rc = mdbx_bk_init(&bk);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_env_create()", rc);
+    failure_perror("mdbx_bk_init()", rc);
 
-  assert(env != nullptr);
-  db_guard.reset(env);
+  assert(bk != nullptr);
+  db_guard.reset(bk);
 
-  rc = mdbx_env_set_userctx(env, this);
+  rc = mdbx_set_userctx(bk, this);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_env_set_userctx()", rc);
+    failure_perror("mdbx_set_userctx()", rc);
 
-  rc = mdbx_env_set_maxreaders(env, config.params.max_readers);
+  rc = mdbx_set_maxreaders(bk, config.params.max_readers);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_env_set_maxreaders()", rc);
+    failure_perror("mdbx_set_maxreaders()", rc);
 
-  rc = mdbx_env_set_maxdbs(env, config.params.max_tables);
+  rc = mdbx_set_max_handles(bk, config.params.max_tables);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_env_set_maxdbs()", rc);
+    failure_perror("mdbx_set_max_handles()", rc);
 
-  rc = mdbx_env_set_oomfunc(env, testcase::oom_callback);
+  rc = rbr_set(bk, testcase::RBR_callback);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_env_set_oomfunc()", rc);
+    failure_perror("rbr_set()", rc);
 
-  rc = mdbx_env_set_mapsize(env, (size_t)config.params.size);
+  rc = mdbx_set_mapsize(bk, (size_t)config.params.size);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_env_set_mapsize()", rc);
+    failure_perror("mdbx_set_mapsize()", rc);
 
   log_trace("<< db_prepare");
 }
@@ -159,10 +159,10 @@ void testcase::db_open() {
 
   if (!db_guard)
     db_prepare();
-  int rc = mdbx_env_open(db_guard.get(), config.params.pathname_db.c_str(),
-                         (unsigned)config.params.mode_flags, 0640);
+  int rc = mdbx_bk_open(db_guard.get(), config.params.pathname_db.c_str(),
+                        (unsigned)config.params.mode_flags, 0640);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_env_open()", rc);
+    failure_perror("mdbx_bk_open()", rc);
 
   log_trace("<< db_open");
 }
@@ -180,10 +180,10 @@ void testcase::txn_begin(bool readonly) {
   assert(!txn_guard);
 
   MDBX_txn *txn = nullptr;
-  int rc =
-      mdbx_txn_begin(db_guard.get(), nullptr, readonly ? MDBX_RDONLY : 0, &txn);
+  int rc = mdbx_tn_begin(db_guard.get(), nullptr,
+                         readonly ? MDBX_RDONLY : MDBX_RDWR, &txn);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_txn_begin()", rc);
+    failure_perror("mdbx_tn_begin()", rc);
   txn_guard.reset(txn);
 
   log_trace("<< txn_begin(%s)", readonly ? "read-only" : "read-write");
@@ -195,13 +195,13 @@ void testcase::txn_end(bool abort) {
 
   MDBX_txn *txn = txn_guard.release();
   if (abort) {
-    int rc = mdbx_txn_abort(txn);
+    int rc = mdbx_tn_abort(txn);
     if (unlikely(rc != MDBX_SUCCESS))
-      failure_perror("mdbx_txn_abort()", rc);
+      failure_perror("mdbx_tn_abort()", rc);
   } else {
-    int rc = mdbx_txn_commit(txn);
+    int rc = mdbx_tn_commit(txn);
     if (unlikely(rc != MDBX_SUCCESS))
-      failure_perror("mdbx_txn_commit()", rc);
+      failure_perror("mdbx_tn_commit()", rc);
   }
 
   log_trace("<< txn_end(%s)", abort ? "abort" : "commit");
@@ -330,7 +330,7 @@ bool testcase::should_continue(bool check_timeout_only) const {
 }
 
 void testcase::fetch_canary() {
-  mdbx_canary canary_now;
+  MDBX_canary_t canary_now;
   log_trace(">> fetch_canary");
 
   int rc = mdbx_canary_get(txn_guard.get(), &canary_now);
@@ -353,7 +353,7 @@ void testcase::fetch_canary() {
 }
 
 void testcase::update_canary(uint64_t increment) {
-  mdbx_canary canary_now = last.canary;
+  MDBX_canary_t canary_now = last.canary;
 
   log_trace(">> update_canary: sequence %" PRIu64 " += %" PRIu64, canary_now.y,
             increment);
@@ -366,7 +366,7 @@ void testcase::update_canary(uint64_t increment) {
   log_trace("<< update_canary: sequence = %" PRIu64, canary_now.y);
 }
 
-MDBX_dbi testcase::db_table_open(bool create) {
+MDBX_aah testcase::db_table_open(bool create) {
   log_trace(">> testcase::db_table_create");
 
   char tablename_buf[16];
@@ -380,43 +380,44 @@ MDBX_dbi testcase::db_table_open(bool create) {
   }
   log_verbose("use %s table", tablename ? tablename : "MAINDB");
 
-  MDBX_dbi handle = 0;
-  int rc = mdbx_dbi_open(txn_guard.get(), tablename,
-                         (create ? MDBX_CREATE : 0) | config.params.table_flags,
-                         &handle);
+  MDBX_aah handle = 0;
+  int rc = mdbx_aa_open(txn_guard.get(), tablename,
+                        (create ? MDBX_CREATE : MDBX_RDWR) |
+                            config.params.table_flags,
+                        &handle, NULL, NULL);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_dbi_open()", rc);
+    failure_perror("mdbx_aa_open()", rc);
 
-  log_trace("<< testcase::db_table_create, handle %u", handle);
+  log_trace("<< testcase::db_table_create, handle %" PRIuFAST32, handle);
   return handle;
 }
 
-void testcase::db_table_drop(MDBX_dbi handle) {
-  log_trace(">> testcase::db_table_drop, handle %u", handle);
+void testcase::db_table_drop(MDBX_aah handle) {
+  log_trace(">> testcase::db_table_drop, handle %" PRIuFAST32, handle);
 
   if (config.params.drop_table) {
-    int rc = mdbx_drop(txn_guard.get(), handle, true);
+    int rc = mdbx_aa_drop(txn_guard.get(), handle, true);
     if (unlikely(rc != MDBX_SUCCESS))
-      failure_perror("mdbx_drop()", rc);
+      failure_perror("mdbx_aa_drop()", rc);
     log_trace("<< testcase::db_table_drop");
   } else {
     log_trace("<< testcase::db_table_drop: not needed");
   }
 }
 
-void testcase::db_table_close(MDBX_dbi handle) {
-  log_trace(">> testcase::db_table_close, handle %u", handle);
+void testcase::db_table_close(MDBX_aah handle) {
+  log_trace(">> testcase::db_table_close, handle %" PRIuFAST32, handle);
   assert(!txn_guard);
-  int rc = mdbx_dbi_close(db_guard.get(), handle);
+  int rc = mdbx_aa_close(db_guard.get(), handle);
   if (unlikely(rc != MDBX_SUCCESS))
-    failure_perror("mdbx_dbi_close()", rc);
+    failure_perror("mdbx_aa_close()", rc);
   log_trace("<< testcase::db_table_close");
 }
 
 //-----------------------------------------------------------------------------
 
 bool test_execute(const actor_config &config) {
-  const mdbx_pid_t pid = osal_getpid();
+  const MDBX_pid_t pid = osal_getpid();
 
   if (global::singlemode) {
     logging::setup(format("single_%s", testcase2str(config.testcase)));

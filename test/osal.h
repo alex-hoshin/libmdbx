@@ -20,13 +20,13 @@ void osal_setup(const std::vector<actor_config> &actors);
 void osal_broadcast(unsigned id);
 int osal_waitfor(unsigned id);
 
-int osal_actor_start(const actor_config &config, mdbx_pid_t &pid);
-actor_status osal_actor_info(const mdbx_pid_t pid);
+int osal_actor_start(const actor_config &config, MDBX_pid_t &pid);
+actor_status osal_actor_info(const MDBX_pid_t pid);
 void osal_killall_actors(void);
-int osal_actor_poll(mdbx_pid_t &pid, unsigned timeout);
+int osal_actor_poll(MDBX_pid_t &pid, unsigned timeout);
 void osal_wait4barrier(void);
 
-mdbx_pid_t osal_getpid(void);
+MDBX_pid_t osal_getpid(void);
 int osal_delay(unsigned seconds);
 void osal_udelay(unsigned us);
 void osal_yield(void);

@@ -4,7 +4,7 @@
 .\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
 .TH MDBX_STAT 1 "2014/06/20" "LMDB 0.9.14"
 .SH NAME
-mdbx_stat \- MDBX environment status tool
+mdbx_stat \- MDBX databook status tool
 .SH SYNOPSIS
 .B mdbx_stat
 [\c
@@ -24,17 +24,17 @@ mdbx_stat \- MDBX environment status tool
 .SH DESCRIPTION
 The
 .B mdbx_stat
-utility displays the status of an MDBX environment.
+utility displays the status of an MDBX databook.
 .SH OPTIONS
 .TP
 .BR \-V
 Write the library version number to the standard output, and exit.
 .TP
 .BR \-e
-Display information about the database environment.
+Display information about the database databook.
 .TP
 .BR \-f
-Display information about the environment freelist.
+Display information about the databook freelist.
 If \fB\-ff\fP is given, summarize each freelist entry.
 If \fB\-fff\fP is given, display the full list of page IDs in the freelist.
 .TP
@@ -42,7 +42,7 @@ If \fB\-fff\fP is given, display the full list of page IDs in the freelist.
 Display the status of an MDBX database which does not use subdirectories.
 .TP
 .BR \-r
-Display information about the environment reader table.
+Display information about the databook reader table.
 Shows the process ID, thread ID, and transaction ID for each active
 reader slot. The process ID and transaction ID are in decimal, the
 thread ID is in hexadecimal. The transaction ID is displayed as "-"
@@ -52,7 +52,7 @@ table and clear them. The reader table will be printed again
 after the check is performed.
 .TP
 .BR \-a
-Display the status of all of the subdatabases in the environment.
+Display the status of all of the subdatabases in the databook.
 .TP
 .BR \-s \ subdb
 Display the status of a specific subdatabase.

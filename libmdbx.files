@@ -1,3 +1,12 @@
+src/aah.c
+src/api.c
+src/cmp.c
+src/env.c
+src/mess.c
+src/meta.c
+src/proto.h
+src/ualb.h
+src/util.c
 tutorial/sample-mdbx.c
 AUTHORS
 LICENSE
@@ -49,3 +58,10 @@ test/utils.h
 tutorial/README.md
 tutorial/sample-bdb.txt
 tutorial/sample-mdb.txt
+src/rthc.c
+src/cursor.c
+src/page.c
+src/txn.c
+src/list.c
+src/debug.c
+src/misc.c

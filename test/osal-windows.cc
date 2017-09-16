@@ -99,7 +99,7 @@ int osal_waitfor(unsigned id) {
   return waitstatus2errcode(rc);
 }
 
-mdbx_pid_t osal_getpid(void) { return GetCurrentProcessId(); }
+MDBX_pid_t osal_getpid(void) { return GetCurrentProcessId(); }
 
 int osal_delay(unsigned seconds) {
   Sleep(seconds * 1000u);
@@ -166,9 +166,9 @@ bool actor_config::osal_deserialize(const char *str, const char *end,
 //-----------------------------------------------------------------------------
 
 typedef std::pair<HANDLE, actor_status> child;
-static std::unordered_map<mdbx_pid_t, child> childs;
+static std::unordered_map<MDBX_pid_t, child> childs;
 
-int osal_actor_start(const actor_config &config, mdbx_pid_t &pid) {
+int osal_actor_start(const actor_config &config, MDBX_pid_t &pid) {
   if (childs.size() == MAXIMUM_WAIT_OBJECTS)
     failure("Could't manage more that %u actors on Windows\n",
             MAXIMUM_WAIT_OBJECTS);
@@ -192,7 +192,7 @@ int osal_actor_start(const actor_config &config, mdbx_pid_t &pid) {
                       NULL, // Retuned thread handle is not inheritable.
                       TRUE, // Child inherits all inheritable handles.
                       NORMAL_PRIORITY_CLASS | INHERIT_PARENT_AFFINITY,
-                      NULL, // Inherit the parent's environment.
+                      NULL, // Inherit the parent's databook.
                       NULL, // Inherit the parent's current directory.
                       &StartupInfo, &ProcessInformation))
     return GetLastError();
@@ -203,7 +203,7 @@ int osal_actor_start(const actor_config &config, mdbx_pid_t &pid) {
   return 0;
 }
 
-actor_status osal_actor_info(const mdbx_pid_t pid) {
+actor_status osal_actor_info(const MDBX_pid_t pid) {
   actor_status status = childs.at(pid).second;
   if (status > as_running)
     return status;
@@ -240,7 +240,7 @@ void osal_killall_actors(void) {
     TerminateProcess(pair.second.first, STATUS_CONTROL_C_EXIT);
 }
 
-int osal_actor_poll(mdbx_pid_t &pid, unsigned timeout) {
+int osal_actor_poll(MDBX_pid_t &pid, unsigned timeout) {
   std::vector<HANDLE> handles;
   handles.reserve(childs.size());
   for (const auto &pair : childs)

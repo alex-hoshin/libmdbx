@@ -55,8 +55,8 @@ static int dbi_flags;
 static char *prog;
 static int Eof;
 
-static MDBX_envinfo envinfo;
-static MDBX_val kbuf, dbuf;
+static MDBX_milieu_info envinfo;
+static MDBX_iov kbuf, dbuf;
 
 #define STRLENOF(s) (sizeof(s) - 1)
 
@@ -137,7 +137,7 @@ static void readhdr(void) {
       if (ptr)
         *ptr = '\0';
       i = sscanf((char *)dbuf.iov_base + STRLENOF("mapsize="), "%" PRIu64 "",
-                 &envinfo.mi_mapsize);
+                 &envinfo.bi_mapsize);
       if (i != 1) {
         fprintf(stderr, "%s: line %" PRIiSIZE ": invalid mapsize %s\n", prog,
                 lineno, (char *)dbuf.iov_base + STRLENOF("mapsize="));
@@ -150,7 +150,7 @@ static void readhdr(void) {
       if (ptr)
         *ptr = '\0';
       i = sscanf((char *)dbuf.iov_base + STRLENOF("maxreaders="), "%u",
-                 &envinfo.mi_maxreaders);
+                 &envinfo.bi_maxreaders);
       if (i != 1) {
         fprintf(stderr, "%s: line %" PRIiSIZE ": invalid maxreaders %s\n", prog,
                 lineno, (char *)dbuf.iov_base + STRLENOF("maxreaders="));
@@ -201,7 +201,7 @@ static int unhex(unsigned char *c2) {
   return c;
 }
 
-static int readline(MDBX_val *out, MDBX_val *buf) {
+static int readline(MDBX_iov *out, MDBX_iov *buf) {
   unsigned char *c1, *c2, *end;
   size_t len, l2;
   int c;
@@ -311,10 +311,10 @@ static void usage(void) {
 
 int main(int argc, char *argv[]) {
   int i, rc;
-  MDBX_env *env = NULL;
+  MDBX_milieu *bk = NULL;
   MDBX_txn *txn = NULL;
   MDBX_cursor *mc = NULL;
-  MDBX_dbi dbi;
+  MDBX_aah aah;
   char *envname = NULL;
   int envflags = 0, putflags = 0;
 
@@ -345,13 +345,13 @@ int main(int argc, char *argv[]) {
       }
       break;
     case 'n':
-      envflags |= MDBX_NOSUBDIR;
+      /* silently ignore for compatibility (MDB_NOSUBDIR option) */
       break;
     case 's':
       subname = strdup(optarg);
       break;
     case 'N':
-      putflags = MDBX_NOOVERWRITE | MDBX_NODUPDATA;
+      putflags = MDBX_IUD_NOOVERWRITE | MDBX_IUD_NODUP;
       break;
     case 'T':
       mode |= NOHDR | PRINT;
@@ -384,25 +384,25 @@ int main(int argc, char *argv[]) {
     readhdr();
 
   envname = argv[optind];
-  rc = mdbx_env_create(&env);
+  rc = mdbx_bk_init(&bk);
   if (rc) {
-    fprintf(stderr, "mdbx_env_create failed, error %d %s\n", rc,
+    fprintf(stderr, "mdbx_bk_init failed, error %d %s\n", rc,
             mdbx_strerror(rc));
     return EXIT_FAILURE;
   }
 
-  mdbx_env_set_maxdbs(env, 2);
+  mdbx_set_max_handles(bk, 2);
 
-  if (envinfo.mi_maxreaders)
-    mdbx_env_set_maxreaders(env, envinfo.mi_maxreaders);
+  if (envinfo.bi_maxreaders)
+    mdbx_set_maxreaders(bk, envinfo.bi_maxreaders);
 
-  if (envinfo.mi_mapsize) {
-    if (envinfo.mi_mapsize > SIZE_MAX) {
-      fprintf(stderr, "mdbx_env_set_mapsize failed, error %d %s\n", rc,
+  if (envinfo.bi_mapsize) {
+    if (envinfo.bi_mapsize > SIZE_MAX) {
+      fprintf(stderr, "mdbx_set_mapsize failed, error %d %s\n", rc,
               mdbx_strerror(MDBX_TOO_LARGE));
       return EXIT_FAILURE;
     }
-    mdbx_env_set_mapsize(env, (size_t)envinfo.mi_mapsize);
+    mdbx_set_mapsize(bk, (size_t)envinfo.bi_mapsize);
   }
 
 #ifdef MDBX_FIXEDMAP
@@ -410,14 +410,14 @@ int main(int argc, char *argv[]) {
     envflags |= MDBX_FIXEDMAP;
 #endif
 
-  rc = mdbx_env_open(env, envname, envflags, 0664);
+  rc = mdbx_bk_open(bk, envname, envflags, 0664);
   if (rc) {
-    fprintf(stderr, "mdbx_env_open failed, error %d %s\n", rc,
+    fprintf(stderr, "mdbx_bk_open failed, error %d %s\n", rc,
             mdbx_strerror(rc));
     goto env_close;
   }
 
-  kbuf.iov_len = mdbx_env_get_maxkeysize(env) * 2 + 2;
+  kbuf.iov_len = mdbx_get_maxkeysize(bk) * 2 + 2;
   kbuf.iov_base = malloc(kbuf.iov_len);
 
   while (!Eof) {
@@ -426,23 +426,23 @@ int main(int argc, char *argv[]) {
       break;
     }
 
-    MDBX_val key, data;
+    MDBX_iov key, data;
     int batch = 0;
 
-    rc = mdbx_txn_begin(env, NULL, 0, &txn);
+    rc = mdbx_tn_begin(bk, NULL, 0, &txn);
     if (rc) {
-      fprintf(stderr, "mdbx_txn_begin failed, error %d %s\n", rc,
+      fprintf(stderr, "mdbx_tn_begin failed, error %d %s\n", rc,
               mdbx_strerror(rc));
       goto env_close;
     }
 
-    rc = mdbx_dbi_open(txn, subname, dbi_flags | MDBX_CREATE, &dbi);
+    rc = mdbx_aa_open(txn, subname, dbi_flags | MDBX_CREATE, &aah, NULL, NULL);
     if (rc) {
       fprintf(stderr, "mdbx_open failed, error %d %s\n", rc, mdbx_strerror(rc));
       goto txn_abort;
     }
 
-    rc = mdbx_cursor_open(txn, dbi, &mc);
+    rc = mdbx_cursor_open(txn, aah, &mc);
     if (rc) {
       fprintf(stderr, "mdbx_cursor_open failed, error %d %s\n", rc,
               mdbx_strerror(rc));
@@ -471,19 +471,19 @@ int main(int argc, char *argv[]) {
       }
       batch++;
       if (batch == 100) {
-        rc = mdbx_txn_commit(txn);
+        rc = mdbx_tn_commit(txn);
         if (rc) {
           fprintf(stderr, "%s: line %" PRIiSIZE ": txn_commit: %s\n", prog,
                   lineno, mdbx_strerror(rc));
           goto env_close;
         }
-        rc = mdbx_txn_begin(env, NULL, 0, &txn);
+        rc = mdbx_tn_begin(bk, NULL, 0, &txn);
         if (rc) {
-          fprintf(stderr, "mdbx_txn_begin failed, error %d %s\n", rc,
+          fprintf(stderr, "mdbx_tn_begin failed, error %d %s\n", rc,
                   mdbx_strerror(rc));
           goto env_close;
         }
-        rc = mdbx_cursor_open(txn, dbi, &mc);
+        rc = mdbx_cursor_open(txn, aah, &mc);
         if (rc) {
           fprintf(stderr, "mdbx_cursor_open failed, error %d %s\n", rc,
                   mdbx_strerror(rc));
@@ -492,22 +492,22 @@ int main(int argc, char *argv[]) {
         batch = 0;
       }
     }
-    rc = mdbx_txn_commit(txn);
+    rc = mdbx_tn_commit(txn);
     txn = NULL;
     if (rc) {
       fprintf(stderr, "%s: line %" PRIiSIZE ": txn_commit: %s\n", prog, lineno,
               mdbx_strerror(rc));
       goto env_close;
     }
-    mdbx_dbi_close(env, dbi);
+    mdbx_aa_close(bk, aah);
     if (!(mode & NOHDR))
       readhdr();
   }
 
 txn_abort:
-  mdbx_txn_abort(txn);
+  mdbx_tn_abort(txn);
 env_close:
-  mdbx_env_close(env);
+  mdbx_bk_shutdown(bk);
 
   return rc ? EXIT_FAILURE : EXIT_SUCCESS;
 }

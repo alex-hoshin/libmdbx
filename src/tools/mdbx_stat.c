@@ -42,13 +42,13 @@ static void signal_handler(int sig) {
 
 #endif /* !WINDOWS */
 
-static void prstat(MDBX_stat *ms) {
+static void prstat(MDBX_aa_info *ms) {
   printf("  Pagesize: %u\n", ms->ms_psize);
-  printf("  Tree depth: %u\n", ms->ms_depth);
-  printf("  Branch pages: %" PRIu64 "\n", ms->ms_branch_pages);
-  printf("  Leaf pages: %" PRIu64 "\n", ms->ms_leaf_pages);
-  printf("  Overflow pages: %" PRIu64 "\n", ms->ms_overflow_pages);
-  printf("  Entries: %" PRIu64 "\n", ms->ms_entries);
+  printf("  Tree depth: %u\n", ms->ai_tree_depth);
+  printf("  Branch pages: %" PRIu64 "\n", ms->ai_branch_pages);
+  printf("  Leaf pages: %" PRIu64 "\n", ms->ai_leaf_pages);
+  printf("  Overflow pages: %" PRIu64 "\n", ms->ai_overflow_pages);
+  printf("  Entries: %" PRIu64 "\n", ms->ai_entries);
 }
 
 static void usage(char *prog) {
@@ -60,11 +60,11 @@ static void usage(char *prog) {
 
 int main(int argc, char *argv[]) {
   int o, rc;
-  MDBX_env *env;
+  MDBX_milieu *bk;
   MDBX_txn *txn;
-  MDBX_dbi dbi;
-  MDBX_stat mst;
-  MDBX_envinfo mei;
+  MDBX_aah aah;
+  MDBX_aa_info mst;
+  MDBX_milieu_info mei;
   char *prog = argv[0];
   char *envname;
   char *subname = NULL;
@@ -74,14 +74,14 @@ int main(int argc, char *argv[]) {
     usage(prog);
   }
 
-  /* -a: print stat of main DB and all subDBs
-   * -s: print stat of only the named subDB
-   * -e: print env info
+  /* -a: print stat of main AA and all subAAs
+   * -s: print stat of only the named subAA
+   * -e: print bk info
    * -f: print freelist info
    * -r: print reader info
    * -n: use NOSUBDIR flag on env_open
    * -V: print version and exit
-   * (default) print stat of only the main DB
+   * (default) print stat of only the main AA
    */
   while ((o = getopt(argc, argv, "Vaefnrs:")) != EOF) {
     switch (o) {
@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
       freinfo++;
       break;
     case 'n':
-      envflags |= MDBX_NOSUBDIR;
+      /* silently ignore for compatibility (MDB_NOSUBDIR option) */
       break;
     case 'r':
       rdrinfo++;
@@ -134,52 +134,52 @@ int main(int argc, char *argv[]) {
 #endif /* !WINDOWS */
 
   envname = argv[optind];
-  rc = mdbx_env_create(&env);
+  rc = mdbx_bk_init(&bk);
   if (rc) {
-    fprintf(stderr, "mdbx_env_create failed, error %d %s\n", rc,
+    fprintf(stderr, "mdbx_bk_init failed, error %d %s\n", rc,
             mdbx_strerror(rc));
     return EXIT_FAILURE;
   }
 
   if (alldbs || subname) {
-    mdbx_env_set_maxdbs(env, 4);
+    mdbx_set_max_handles(bk, 4);
   }
 
-  rc = mdbx_env_open(env, envname, envflags | MDBX_RDONLY, 0664);
+  rc = mdbx_bk_open(bk, envname, envflags | MDBX_RDONLY, 0664);
   if (rc) {
-    fprintf(stderr, "mdbx_env_open failed, error %d %s\n", rc,
+    fprintf(stderr, "mdbx_bk_open failed, error %d %s\n", rc,
             mdbx_strerror(rc));
     goto env_close;
   }
 
   if (envinfo) {
-    (void)mdbx_env_stat(env, &mst, sizeof(mst));
-    (void)mdbx_env_info(env, &mei, sizeof(mei));
-    printf("Environment Info\n");
+    (void)mdbx_bk_stat(bk, &mst, sizeof(mst));
+    (void)mdbx_bk_info(bk, &mei, sizeof(mei));
+    printf("Databook Info\n");
     printf("  Pagesize: %u\n", mst.ms_psize);
-    if (mei.mi_geo.lower != mei.mi_geo.upper) {
+    if (mei.bi_geo.lower != mei.bi_geo.upper) {
       printf("  Dynamic datafile: %" PRIu64 "..%" PRIu64 " bytes (+%" PRIu64
              "/-%" PRIu64 "), %" PRIu64 "..%" PRIu64 " pages (+%" PRIu64
              "/-%" PRIu64 ")\n",
-             mei.mi_geo.lower, mei.mi_geo.upper, mei.mi_geo.grow,
-             mei.mi_geo.shrink, mei.mi_geo.lower / mst.ms_psize,
-             mei.mi_geo.upper / mst.ms_psize, mei.mi_geo.grow / mst.ms_psize,
-             mei.mi_geo.shrink / mst.ms_psize);
+             mei.bi_geo.lower, mei.bi_geo.upper, mei.bi_geo.grow,
+             mei.bi_geo.shrink, mei.bi_geo.lower / mst.ms_psize,
+             mei.bi_geo.upper / mst.ms_psize, mei.bi_geo.grow / mst.ms_psize,
+             mei.bi_geo.shrink / mst.ms_psize);
       printf("  Current datafile: %" PRIu64 " bytes, %" PRIu64 " pages\n",
-             mei.mi_geo.current, mei.mi_geo.current / mst.ms_psize);
+             mei.bi_geo.current, mei.bi_geo.current / mst.ms_psize);
     } else {
       printf("  Fixed datafile: %" PRIu64 " bytes, %" PRIu64 " pages\n",
-             mei.mi_geo.current, mei.mi_geo.current / mst.ms_psize);
+             mei.bi_geo.current, mei.bi_geo.current / mst.ms_psize);
     }
     printf("  Current mapsize: %" PRIu64 " bytes, %" PRIu64 " pages \n",
-           mei.mi_mapsize, mei.mi_mapsize / mst.ms_psize);
-    printf("  Number of pages used: %" PRIu64 "\n", mei.mi_last_pgno + 1);
-    printf("  Last transaction ID: %" PRIu64 "\n", mei.mi_recent_txnid);
+           mei.bi_mapsize, mei.bi_mapsize / mst.ms_psize);
+    printf("  Number of pages used: %" PRIu64 "\n", mei.bi_last_pgno + 1);
+    printf("  Last transaction ID: %" PRIu64 "\n", mei.bi_recent_txnid);
     printf("  Tail transaction ID: %" PRIu64 " (%" PRIi64 ")\n",
-           mei.mi_latter_reader_txnid,
-           mei.mi_latter_reader_txnid - mei.mi_recent_txnid);
-    printf("  Max readers: %u\n", mei.mi_maxreaders);
-    printf("  Number of readers used: %u\n", mei.mi_numreaders);
+           mei.bi_latter_reader_txnid,
+           mei.bi_latter_reader_txnid - mei.bi_recent_txnid);
+    printf("  Max readers: %u\n", mei.bi_maxreaders);
+    printf("  Number of readers used: %u\n", mei.bi_numreaders);
   } else {
     /* LY: zap warnings from gcc */
     memset(&mst, 0, sizeof(mst));
@@ -188,41 +188,41 @@ int main(int argc, char *argv[]) {
 
   if (rdrinfo) {
     printf("Reader Table Status\n");
-    rc = mdbx_reader_list(env, (MDBX_msg_func *)fputs, stdout);
+    rc = mdbx_reader_list(bk, (MDBX_msg_func *)fputs, stdout);
     if (rdrinfo > 1) {
       int dead;
-      mdbx_reader_check(env, &dead);
+      mdbx_check_readers(bk, &dead);
       printf("  %d stale readers cleared.\n", dead);
-      rc = mdbx_reader_list(env, (MDBX_msg_func *)fputs, stdout);
+      rc = mdbx_reader_list(bk, (MDBX_msg_func *)fputs, stdout);
     }
     if (!(subname || alldbs || freinfo))
       goto env_close;
   }
 
-  rc = mdbx_txn_begin(env, NULL, MDBX_RDONLY, &txn);
+  rc = mdbx_tn_begin(bk, NULL, MDBX_RDONLY, &txn);
   if (rc) {
-    fprintf(stderr, "mdbx_txn_begin failed, error %d %s\n", rc,
+    fprintf(stderr, "mdbx_tn_begin failed, error %d %s\n", rc,
             mdbx_strerror(rc));
     goto env_close;
   }
 
   if (freinfo) {
     MDBX_cursor *cursor;
-    MDBX_val key, data;
+    MDBX_iov key, data;
     pgno_t pages = 0, *iptr;
     pgno_t reclaimable = 0;
 
     printf("Freelist Status\n");
-    dbi = 0;
-    rc = mdbx_cursor_open(txn, dbi, &cursor);
+    aah = 0;
+    rc = mdbx_cursor_open(txn, aah, &cursor);
     if (rc) {
       fprintf(stderr, "mdbx_cursor_open failed, error %d %s\n", rc,
               mdbx_strerror(rc));
       goto txn_abort;
     }
-    rc = mdbx_dbi_stat(txn, dbi, &mst, sizeof(mst));
+    rc = mdbx_aa_info(txn, aah, &mst, sizeof(mst));
     if (rc) {
-      fprintf(stderr, "mdbx_dbi_stat failed, error %d %s\n", rc,
+      fprintf(stderr, "mdbx_aa_stat failed, error %d %s\n", rc,
               mdbx_strerror(rc));
       goto txn_abort;
     }
@@ -237,13 +237,13 @@ int main(int argc, char *argv[]) {
       const pgno_t number = *iptr++;
 
       pages += number;
-      if (envinfo && mei.mi_latter_reader_txnid > *(size_t *)key.iov_base)
+      if (envinfo && mei.bi_latter_reader_txnid > *(size_t *)key.iov_base)
         reclaimable += number;
 
       if (freinfo > 1) {
         char *bad = "";
         pgno_t prev =
-            MDBX_PNL_ASCENDING ? NUM_METAS - 1 : (pgno_t)mei.mi_last_pgno + 1;
+            MDBX_PNL_ASCENDING ? NUM_METAS - 1 : (pgno_t)mei.bi_last_pgno + 1;
         pgno_t span = 1;
         for (unsigned i = 0; i < number; ++i) {
           pgno_t pg = iptr[i];
@@ -291,18 +291,18 @@ int main(int argc, char *argv[]) {
     }
 
     if (envinfo) {
-      uint64_t value = mei.mi_mapsize / mst.ms_psize;
+      uint64_t value = mei.bi_mapsize / mst.ms_psize;
       double percent = value / 100.0;
       printf("Page Allocation Info\n");
       printf("  Max pages: %" PRIu64 " 100%%\n", value);
 
-      value = mei.mi_last_pgno + 1;
+      value = mei.bi_last_pgno + 1;
       printf("  Pages used: %" PRIu64 " %.1f%%\n", value, value / percent);
 
-      value = mei.mi_mapsize / mst.ms_psize - (mei.mi_last_pgno + 1);
+      value = mei.bi_mapsize / mst.ms_psize - (mei.bi_last_pgno + 1);
       printf("  Remained: %" PRIu64 " %.1f%%\n", value, value / percent);
 
-      value = mei.mi_last_pgno + 1 - pages;
+      value = mei.bi_last_pgno + 1 - pages;
       printf("  Used now: %" PRIu64 " %.1f%%\n", value, value / percent);
 
       value = pages;
@@ -315,32 +315,32 @@ int main(int argc, char *argv[]) {
       printf("  Reclaimable: %" PRIu64 " %.1f%%\n", value, value / percent);
 
       value =
-          mei.mi_mapsize / mst.ms_psize - (mei.mi_last_pgno + 1) + reclaimable;
+          mei.bi_mapsize / mst.ms_psize - (mei.bi_last_pgno + 1) + reclaimable;
       printf("  Available: %" PRIu64 " %.1f%%\n", value, value / percent);
     } else
       printf("  Free pages: %" PRIaPGNO "\n", pages);
   }
 
-  rc = mdbx_dbi_open(txn, subname, 0, &dbi);
+  rc = mdbx_aa_open(txn, subname, 0, &aah, NULL, NULL);
   if (rc) {
     fprintf(stderr, "mdbx_open failed, error %d %s\n", rc, mdbx_strerror(rc));
     goto txn_abort;
   }
 
-  rc = mdbx_dbi_stat(txn, dbi, &mst, sizeof(mst));
+  rc = mdbx_aa_info(txn, aah, &mst, sizeof(mst));
   if (rc) {
-    fprintf(stderr, "mdbx_dbi_stat failed, error %d %s\n", rc,
+    fprintf(stderr, "mdbx_aa_stat failed, error %d %s\n", rc,
             mdbx_strerror(rc));
     goto txn_abort;
   }
-  printf("Status of %s\n", subname ? subname : "Main DB");
+  printf("Status of %s\n", subname ? subname : "Main AA");
   prstat(&mst);
 
   if (alldbs) {
     MDBX_cursor *cursor;
-    MDBX_val key;
+    MDBX_iov key;
 
-    rc = mdbx_cursor_open(txn, dbi, &cursor);
+    rc = mdbx_cursor_open(txn, aah, &cursor);
     if (rc) {
       fprintf(stderr, "mdbx_cursor_open failed, error %d %s\n", rc,
               mdbx_strerror(rc));
@@ -348,26 +348,26 @@ int main(int argc, char *argv[]) {
     }
     while ((rc = mdbx_cursor_get(cursor, &key, NULL, MDBX_NEXT_NODUP)) == 0) {
       char *str;
-      MDBX_dbi db2;
+      MDBX_aah db2;
       if (memchr(key.iov_base, '\0', key.iov_len))
         continue;
       str = malloc(key.iov_len + 1);
       memcpy(str, key.iov_base, key.iov_len);
       str[key.iov_len] = '\0';
-      rc = mdbx_dbi_open(txn, str, 0, &db2);
+      rc = mdbx_aa_open(txn, str, 0, &db2, NULL, NULL);
       if (rc == MDBX_SUCCESS)
         printf("Status of %s\n", str);
       free(str);
       if (rc)
         continue;
-      rc = mdbx_dbi_stat(txn, db2, &mst, sizeof(mst));
+      rc = mdbx_aa_info(txn, db2, &mst, sizeof(mst));
       if (rc) {
-        fprintf(stderr, "mdbx_dbi_stat failed, error %d %s\n", rc,
+        fprintf(stderr, "mdbx_aa_stat failed, error %d %s\n", rc,
                 mdbx_strerror(rc));
         goto txn_abort;
       }
       prstat(&mst);
-      mdbx_dbi_close(env, db2);
+      mdbx_aa_close(bk, db2);
     }
     mdbx_cursor_close(cursor);
   }
@@ -375,11 +375,11 @@ int main(int argc, char *argv[]) {
   if (rc == MDBX_NOTFOUND)
     rc = MDBX_SUCCESS;
 
-  mdbx_dbi_close(env, dbi);
+  mdbx_aa_close(bk, aah);
 txn_abort:
-  mdbx_txn_abort(txn);
+  mdbx_tn_abort(txn);
 env_close:
-  mdbx_env_close(env);
+  mdbx_bk_shutdown(bk);
 
   return rc ? EXIT_FAILURE : EXIT_SUCCESS;
 }

@@ -78,7 +78,7 @@ enum : serial_t {
 };
 
 struct result {
-  MDBX_val value;
+  MDBX_iov value;
   size_t limit;
   union {
     uint8_t bytes[sizeof(uint64_t)];

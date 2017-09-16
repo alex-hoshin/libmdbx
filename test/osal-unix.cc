@@ -149,11 +149,11 @@ static std::unordered_map<pid_t, actor_status> childs;
 
 static void handler_SIGCHLD(int unused) { (void)unused; }
 
-mdbx_pid_t osal_getpid(void) { return getpid(); }
+MDBX_pid_t osal_getpid(void) { return getpid(); }
 
 int osal_delay(unsigned seconds) { return sleep(seconds) ? errno : 0; }
 
-int osal_actor_start(const actor_config &config, mdbx_pid_t &pid) {
+int osal_actor_start(const actor_config &config, MDBX_pid_t &pid) {
   if (childs.empty())
     signal(SIGCHLD, handler_SIGCHLD);
 
@@ -172,7 +172,7 @@ int osal_actor_start(const actor_config &config, mdbx_pid_t &pid) {
   return 0;
 }
 
-actor_status osal_actor_info(const mdbx_pid_t pid) { return childs.at(pid); }
+actor_status osal_actor_info(const MDBX_pid_t pid) { return childs.at(pid); }
 
 void osal_killall_actors(void) {
   for (auto &pair : childs) {
@@ -181,7 +181,7 @@ void osal_killall_actors(void) {
   }
 }
 
-int osal_actor_poll(mdbx_pid_t &pid, unsigned timeout) {
+int osal_actor_poll(MDBX_pid_t &pid, unsigned timeout) {
 retry:
   int status, options = WNOHANG;
 #ifdef WUNTRACED

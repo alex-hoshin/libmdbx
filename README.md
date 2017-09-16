@@ -416,7 +416,7 @@ _libmdbx_ при этом не ведет WAL, а передает весь ко
 ссылками на страницы с новыми версиями данных, но не сами новые данные.
 В этом случае БД будет безвозвратна разрушена, даже если до аварии
 производилась полная синхронизация данных (посредством
-`mdbx_env_sync()`).
+`mdbx_bk_sync()`).
 
 В _libmdbx_ эта проблема устранена, подробности ниже.
 
@@ -439,9 +439,9 @@ _libmdbx_ при этом не ведет WAL, а передает весь ко
 	многократное увеличение производительности по записи
 	(обновлению данных).
 
-2. Обработчик `OOM-KICK`.
+2. Обработчик `RBR-KICK`.
 
-	Посредством `mdbx_env_set_oomfunc()` может быть установлен
+	Посредством `rbr_set()` может быть установлен
 	внешний обработчик (callback), который будет вызван при
 	исчерпания свободных страниц из-за долгой операцией чтения.
 	Обработчику будет передан PID и pthread_id виновника.
@@ -471,7 +471,7 @@ _libmdbx_ при этом не ведет WAL, а передает весь ко
 	сохранены мета-страницы со ссылками на страницы с новыми
 	версиями данных, но не сами новые данные. В этом случае БД
 	будет безвозвратна разрушена, даже если до аварии производилась
-	полная синхронизация данных (посредством `mdbx_env_sync()`).
+	полная синхронизация данных (посредством `mdbx_bk_sync()`).
 
 	В _libmdbx_ эта проблема устранена путем полной переработки
 	пути записи данных:
@@ -514,26 +514,26 @@ _libmdbx_ при этом не ведет WAL, а передает весь ко
 
 4. Возможность автоматического формирования контрольных точек
 (сброса данных на диск) при накоплении заданного объёма изменений,
-устанавливаемого функцией `mdbx_env_set_syncbytes()`.
+устанавливаемого функцией `mdbx_set_syncbytes()`.
 
 5. Возможность получить отставание текущей транзакции чтения от
-последней версии данных в БД посредством `mdbx_txn_straggler()`.
+последней версии данных в БД посредством `mdbx_tn_lag()`.
 
-6. Утилита mdbx_chk для проверки БД и функция `mdbx_env_pgwalk()` для
+6. Утилита mdbx_chk для проверки БД и функция `mdbx_bk_pgwalk()` для
 обхода всех страниц БД.
 
 7. Управление отладкой и получение отладочных сообщений посредством
-`mdbx_setup_debug()`.
+`mdbx_set_debug()`.
 
 8. Возможность связать с каждой завершаемой транзакцией до 3
 дополнительных маркеров посредством `mdbx_canary_put()`, и прочитать их
 в транзакции чтения посредством `mdbx_canary_get()`.
 
 9. Возможность узнать есть ли за текущей позицией курсора строка данных
-посредством `mdbx_cursor_eof()`.
+посредством `mdbx_cr_eof()`.
 
 10. Возможность явно запросить обновление существующей записи, без
-создания новой посредством флажка `MDBX_CURRENT` для `mdbx_put()`.
+создания новой посредством флажка `MDBX_IUD_CURRENT` для `mdbx_put()`.
 
 11. Возможность посредством `mdbx_replace()` обновить или удалить запись
 с получением предыдущего значения данных, а также адресно изменить
@@ -546,12 +546,12 @@ _libmdbx_ при этом не ведет WAL, а передает весь ко
 количество дубликатов для всех типов таблиц и любого положения курсора.
 
 14. Возможность открыть БД в эксклюзивном режиме посредством
-`mdbx_env_open_ex()`, например в целях её проверки.
+`mdbx_bk_open_ex()`, например в целях её проверки.
 
 15. Возможность закрыть БД в "грязном" состоянии (без сброса данных и
-формирования сильной точки фиксации) посредством `mdbx_env_close_ex()`.
+формирования сильной точки фиксации) посредством `mdbx_bk_close_ex()`.
 
-16. Возможность получить посредством `mdbx_env_info()` дополнительную
+16. Возможность получить посредством `mdbx_bk_info()` дополнительную
 информацию, включая номер самой старой версии БД (снимка данных),
 который используется одним из читателей.
 
@@ -560,8 +560,8 @@ _libmdbx_ при этом не ведет WAL, а передает весь ко
 при его ненулевом значении всегда использует его для сверки с удаляемой
 записью.
 
-18. Возможность открыть dbi-таблицу, одновременно с установкой
-компараторов для ключей и данных, посредством `mdbx_dbi_open_ex()`.
+18. Возможность открыть aah-таблицу, одновременно с установкой
+компараторов для ключей и данных, посредством `mdbx_aa_open_ex()`.
 
 19. Возможность посредством `mdbx_is_dirty()` определить находятся ли
 некоторый ключ или данные в "грязной" странице БД. Таким образом,
@@ -570,11 +570,11 @@ _libmdbx_ при этом не ведет WAL, а передает весь ко
 перезаписаны при изменениях, иначе они будут неизменны).
 
 20. Корректное обновление текущей записи, в том числе сортированного
-дубликата, при использовании режима `MDBX_CURRENT` в
+дубликата, при использовании режима `MDBX_IUD_CURRENT` в
 `mdbx_cursor_put()`.
 
 21. Все курсоры, как в транзакциях только для чтения, так и в пишущих,
-могут быть переиспользованы посредством `mdbx_cursor_renew()` и ДОЛЖНЫ
+могут быть переиспользованы посредством `mdbx_cr_renew()` и ДОЛЖНЫ
 ОСВОБОЖДАТЬСЯ ЯВНО.
   >
   > ## _ВАЖНО_, Обратите внимание!
@@ -595,19 +595,19 @@ _libmdbx_ при этом не ведет WAL, а передает весь ко
 23. Возможность посредством `mdbx_get_ex()` получить значение по
 заданному ключу, одновременно с количеством дубликатов.
 
-24. Наличие функций `mdbx_cursor_on_first()` и `mdbx_cursor_on_last()`,
+24. Наличие функций `mdbx_cursor_at_first()` и `mdbx_cursor_at_last()`,
 которые позволяют быстро выяснить стоит ли курсор на первой/последней
 позиции.
 
-25. При завершении читающих транзакций, открытые в них DBI-хендлы не
+25. При завершении читающих транзакций, открытые в них AAH-хендлы не
 закрываются и не теряются при завершении таких транзакций посредством
-`mdbx_txn_abort()` или `mdbx_txn_reset()`. Что позволяет избавится от ряда
+`mdbx_tn_abort()` или `mdbx_tn_reset()`. Что позволяет избавится от ряда
 сложно обнаруживаемых ошибок.
 
-26. Генерация последовательностей посредством `mdbx_dbi_sequence()`.
+26. Генерация последовательностей посредством `mdbx_aa_sequence()`.
 
 27. Расширенное динамическое управление размером БД, включая выбор
-размера страницы посредством `mdbx_env_set_geometry()`.
+размера страницы посредством `mdbx_set_geometry()`.
 
 28. Три мета-страницы вместо двух, что позволяет гарантированно
 консистентно обновлять слабые контрольные точки фиксации без риска
@@ -644,79 +644,79 @@ $ objdump -C -T libmdbx.so | grep mdbx | sort
 
 00004057 g    DF .text	0000003f  Base        mdbx_strerror_r
 00004096 g    DF .text	00000031  Base        mdbx_strerror
-00004207 g    DF .text	00000025  Base        mdbx_env_get_maxkeysize
-0000422c g    DF .text	000000b8  Base        mdbx_env_create
-000042e4 g    DF .text	0000001f  Base        mdbx_env_set_mapsize
-00004f9f g    DF .text	00000037  Base        mdbx_env_set_maxdbs
-00004fd6 g    DF .text	00000036  Base        mdbx_env_set_maxreaders
-0000500c g    DF .text	00000027  Base        mdbx_env_get_maxreaders
-00005033 g    DF .text	0000066a  Base        mdbx_env_open_ex
-0000569d g    DF .text	00000008  Base        mdbx_env_open
-000056a5 g    DF .text	00000096  Base        mdbx_env_close_ex
-0000573b g    DF .text	00000007  Base        mdbx_env_close
-00005742 g    DF .text	00000047  Base        mdbx_env_set_flags
-00005789 g    DF .text	0000001d  Base        mdbx_env_get_flags
-000057a6 g    DF .text	00000014  Base        mdbx_env_set_userctx
-000057ba g    DF .text	0000000f  Base        mdbx_env_get_userctx
-000057c9 g    DF .text	0000000d  Base        mdbx_env_set_assert
-000057d6 g    DF .text	0000001d  Base        mdbx_env_get_path
-000057f3 g    DF .text	00000018  Base        mdbx_env_get_fd
-0000580b g    DF .text	00000056  Base        mdbx_env_stat
-00005861 g    DF .text	00000276  Base        mdbx_env_info
+00004207 g    DF .text	00000025  Base        mdbx_get_maxkeysize
+0000422c g    DF .text	000000b8  Base        mdbx_bk_create
+000042e4 g    DF .text	0000001f  Base        mdbx_set_mapsize
+00004f9f g    DF .text	00000037  Base        mdbx_set_max_handles
+00004fd6 g    DF .text	00000036  Base        mdbx_set_maxreaders
+0000500c g    DF .text	00000027  Base        mdbx_get_maxreaders
+00005033 g    DF .text	0000066a  Base        mdbx_bk_open_ex
+0000569d g    DF .text	00000008  Base        mdbx_bk_open
+000056a5 g    DF .text	00000096  Base        mdbx_bk_close_ex
+0000573b g    DF .text	00000007  Base        mdbx_bk_close
+00005742 g    DF .text	00000047  Base        mdbx_bk_set_flags
+00005789 g    DF .text	0000001d  Base        mdbx_bk_get_flags
+000057a6 g    DF .text	00000014  Base        mdbx_set_userctx
+000057ba g    DF .text	0000000f  Base        mdbx_get_userctx
+000057c9 g    DF .text	0000000d  Base        mdbx_set_assert
+000057d6 g    DF .text	0000001d  Base        mdbx_bk_get_path
+000057f3 g    DF .text	00000018  Base        mdbx_bk_get_fd
+0000580b g    DF .text	00000056  Base        mdbx_bk_stat
+00005861 g    DF .text	00000276  Base        mdbx_bk_info
 00005ad7 g    DF .text	00000148  Base        mdbx_reader_list
-0000656a g    DF .text	0000012a  Base        mdbx_dbi_stat
-0000693a g    DF .text	00000146  Base        mdbx_env_copy2fd
-00006a80 g    DF .text	0000012e  Base        mdbx_env_copy
-00006bae g    DF .text	0000002a  Base        mdbx_reader_check
-00006bd8 g    DF .text	000000f9  Base        mdbx_setup_debug
-00006cd1 g    DF .text	00000033  Base        mdbx_env_set_syncbytes
-00006d04 g    DF .text	00000023  Base        mdbx_env_set_oomfunc
-00006d27 g    DF .text	00000019  Base        mdbx_env_get_oomfunc
-00006d40 g    DF .text	00000121  Base        mdbx_env_pgwalk
-0000ac60 g    DF .text	00000163  Base        mdbx_dkey
+0000656a g    DF .text	0000012a  Base        mdbx_aa_stat
+0000693a g    DF .text	00000146  Base        mdbx_bk_copy2fd
+00006a80 g    DF .text	0000012e  Base        mdbx_bk_copy
+00006bae g    DF .text	0000002a  Base        mdbx_check_readers
+00006bd8 g    DF .text	000000f9  Base        mdbx_set_debug
+00006cd1 g    DF .text	00000033  Base        mdbx_set_syncbytes
+00006d04 g    DF .text	00000023  Base        rbr_set
+00006d27 g    DF .text	00000019  Base        mdbx_RBR_get
+00006d40 g    DF .text	00000121  Base        mdbx_bk_pgwalk
+0000ac60 g    DF .text	00000163  Base        mdbx_dump_iov
 0000add0 g    DF .text	00000016  Base        mdbx_cmp
 0000adf0 g    DF .text	00000016  Base        mdbx_dcmp
-0000ae10 g    DF .text	00000271  Base        mdbx_env_sync
-0000b090 g    DF .text	0000001b  Base        mdbx_txn_env
-0000b0b0 g    DF .text	0000001c  Base        mdbx_txn_id
-0000b0d0 g    DF .text	00000077  Base        mdbx_txn_reset
-0000b150 g    DF .text	00000077  Base        mdbx_txn_abort
-0000b1d0 g    DF .text	00000057  Base        mdbx_get_maxkeysize
-0000b230 g    DF .text	000006b7  Base        mdbx_env_set_geometry
+0000ae10 g    DF .text	00000271  Base        mdbx_bk_sync
+0000b090 g    DF .text	0000001b  Base        mdbx_tn_book
+0000b0b0 g    DF .text	0000001c  Base        mdbx_tn_id
+0000b0d0 g    DF .text	00000077  Base        mdbx_tn_reset
+0000b150 g    DF .text	00000077  Base        mdbx_tn_abort
+0000b1d0 g    DF .text	00000057  Base        mdbx_pagesize2maxkeylen
+0000b230 g    DF .text	000006b7  Base        mdbx_set_geometry
 0000b8f0 g    DF .text	000000ef  Base        mdbx_cursor_count
 0000b9e0 g    DF .text	000000ad  Base        mdbx_cursor_close
 0000ba90 g    DF .text	0000001b  Base        mdbx_cursor_txn
-0000bab0 g    DF .text	00000017  Base        mdbx_cursor_dbi
-0000bad0 g    DF .text	0000007d  Base        mdbx_dbi_close
-0000bb50 g    DF .text	000000cc  Base        mdbx_dbi_flags_ex
-0000bc20 g    DF .text	00000038  Base        mdbx_dbi_flags
-0000c250 g    DF .text	00000077  Base        mdbx_txn_renew
-0000c2d0 g    DF .text	000004e5  Base        mdbx_txn_begin
+0000bab0 g    DF .text	00000017  Base        mdbx_cursor_aah
+0000bad0 g    DF .text	0000007d  Base        mdbx_aa_close
+0000bb50 g    DF .text	000000cc  Base        mdbx_aa_state
+0000bc20 g    DF .text	00000038  Base        mdbx_aa_flags
+0000c250 g    DF .text	00000077  Base        mdbx_tn_renew
+0000c2d0 g    DF .text	000004e5  Base        mdbx_tn_begin
 0000dcb0 g    DF .text	00000128  Base        mdbx_cursor_open
-0000dde0 g    DF .text	0000011d  Base        mdbx_cursor_renew
+0000dde0 g    DF .text	0000011d  Base        mdbx_cr_renew
 0000e970 g    DF .text	000000fc  Base        mdbx_get
 0000ef00 g    DF .text	00000489  Base        mdbx_cursor_get
-000125e0 g    DF .text	00000719  Base        mdbx_cursor_del
+000125e0 g    DF .text	00000719  Base        mdbx_cursor_delete
 00012e00 g    DF .text	000000e4  Base        mdbx_del
-00012ef0 g    DF .text	000002c3  Base        mdbx_drop
+00012ef0 g    DF .text	000002c3  Base        mdbx_aa_drop
 000131c0 g    DF .text	0000129e  Base        mdbx_cursor_put
 000145d0 g    DF .text	000000a7  Base        mdbx_put
-00014b60 g    DF .text	000000bf  Base        mdbx_dbi_open_ex
-00014c20 g    DF .text	0000000b  Base        mdbx_dbi_open
-00014c30 g    DF .text	00001347  Base        mdbx_txn_commit
-00015f80 g    DF .text	00000105  Base        mdbx_txn_straggler
+00014b60 g    DF .text	000000bf  Base        mdbx_aa_open_ex
+00014c20 g    DF .text	0000000b  Base        mdbx_aa_open
+00014c30 g    DF .text	00001347  Base        mdbx_tn_commit
+00015f80 g    DF .text	00000105  Base        mdbx_tn_lag
 00016090 g    DF .text	000000e7  Base        mdbx_canary_put
 00016180 g    DF .text	00000078  Base        mdbx_canary_get
-00016200 g    DF .text	0000006e  Base        mdbx_cursor_on_first
-00016270 g    DF .text	00000096  Base        mdbx_cursor_on_last
-00016310 g    DF .text	00000066  Base        mdbx_cursor_eof
+00016200 g    DF .text	0000006e  Base        mdbx_cursor_at_first
+00016270 g    DF .text	00000096  Base        mdbx_cursor_at_last
+00016310 g    DF .text	00000066  Base        mdbx_cr_eof
 00016380 g    DF .text	00000504  Base        mdbx_replace
 00016890 g    DF .text	0000017d  Base        mdbx_get_ex
 00016a10 g    DF .text	000000a4  Base        mdbx_is_dirty
-00016ac0 g    DF .text	00000120  Base        mdbx_dbi_sequence
-00016be0 g    DF .text	00000064  Base        mdbx_cursor_get_attr
+00016ac0 g    DF .text	00000120  Base        mdbx_aa_sequence
+00016be0 g    DF .text	00000064  Base        mdbx_cr_get_attr
 00016c50 g    DF .text	00000064  Base        mdbx_get_attr
 00016cc0 g    DF .text	000000c7  Base        mdbx_put_attr
-00016d90 g    DF .text	000000c7  Base        mdbx_cursor_put_attr
+00016d90 g    DF .text	000000c7  Base        mdbx_cr_put_attr
 00016e60 g    DF .text	00000244  Base        mdbx_set_attr
 ```

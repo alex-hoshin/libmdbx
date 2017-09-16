@@ -4,9 +4,9 @@
 .\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
 .TH MDBX_COPY 1 "2014/06/20" "LMDB 0.9.14"
 .SH NAME
-mdbx_copy \- MDBX environment copy tool
+copy_ctx_ \- MDBX databook copy tool
 .SH SYNOPSIS
-.B mdbx_copy
+.B copy_ctx_
 [\c
 .BR \-V ]
 [\c
@@ -18,8 +18,8 @@ mdbx_copy \- MDBX environment copy tool
 .BR dstpath ]
 .SH DESCRIPTION
 The
-.B mdbx_copy
-utility copies an MDBX environment. The environment can
+.B copy_ctx_
+utility copies an MDBX databook. The databook can
 be copied regardless of whether it is currently in use.
 No lockfile is created, since it gets recreated at need.
 
@@ -38,10 +38,10 @@ Write the library version number to the standard output, and exit.
 Compact while copying. Only current data pages will be copied; freed
 or unused pages will be omitted from the copy. This option will
 slow down the backup process as it is more CPU-intensive.
-Currently it fails if the environment has suffered a page leak.
+Currently it fails if the databook has suffered a page leak.
 .TP
 .BR \-n
-Open LDMB environment(s) which do not use subdirectories.
+Open LDMB databook(s) which do not use subdirectories.
 
 .SH DIAGNOSTICS
 Exit status is zero if no errors occur.

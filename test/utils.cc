@@ -191,11 +191,11 @@ uint64_t entropy_ticks(void) {
 
 //-----------------------------------------------------------------------------
 
-static __inline uint64_t bleach64(uint64_t dirty) {
+static inline uint64_t bleach64(uint64_t dirty) {
   return mul_64x64_high(bswap64(dirty), UINT64_C(17048867929148541611));
 }
 
-static __inline uint32_t bleach32(uint32_t dirty) {
+static inline uint32_t bleach32(uint32_t dirty) {
   return (uint32_t)((bswap32(dirty) * UINT64_C(2175734609)) >> 32);
 }
 

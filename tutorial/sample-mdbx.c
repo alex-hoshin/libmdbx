@@ -27,33 +27,32 @@ int main(int argc, char *argv[]) {
   (void)argv;
 
   int rc;
-  MDBX_env *env = NULL;
-  MDBX_dbi dbi = 0;
-  MDBX_val key, data;
+  MDBX_milieu *bk = NULL;
+  MDBX_aah aah = 0;
+  MDBX_iov key, data;
   MDBX_txn *txn = NULL;
   MDBX_cursor *cursor = NULL;
   char sval[32];
 
-  rc = mdbx_env_create(&env);
+  rc = mdbx_bk_init(&bk);
   if (rc != MDBX_SUCCESS) {
-    fprintf(stderr, "mdbx_env_create: (%d) %s\n", rc, mdbx_strerror(rc));
+    fprintf(stderr, "mdbx_bk_init: (%d) %s\n", rc, mdbx_strerror(rc));
     goto bailout;
   }
-  rc = mdbx_env_open(env, "./example-db",
-                     MDBX_NOSUBDIR | MDBX_COALESCE | MDBX_LIFORECLAIM, 0664);
+  rc = mdbx_bk_open(bk, "./example-db", MDBX_COALESCE | MDBX_LIFORECLAIM, 0664);
   if (rc != MDBX_SUCCESS) {
-    fprintf(stderr, "mdbx_env_open: (%d) %s\n", rc, mdbx_strerror(rc));
+    fprintf(stderr, "mdbx_bk_open: (%d) %s\n", rc, mdbx_strerror(rc));
     goto bailout;
   }
 
-  rc = mdbx_txn_begin(env, NULL, 0, &txn);
+  rc = mdbx_tn_begin(bk, NULL, 0, &txn);
   if (rc != MDBX_SUCCESS) {
-    fprintf(stderr, "mdbx_txn_begin: (%d) %s\n", rc, mdbx_strerror(rc));
+    fprintf(stderr, "mdbx_tn_begin: (%d) %s\n", rc, mdbx_strerror(rc));
     goto bailout;
   }
-  rc = mdbx_dbi_open(txn, NULL, 0, &dbi);
+  rc = mdbx_aa_open(txn, NULL, 0, &aah, NULL, NULL);
   if (rc != MDBX_SUCCESS) {
-    fprintf(stderr, "mdbx_dbi_open: (%d) %s\n", rc, mdbx_strerror(rc));
+    fprintf(stderr, "mdbx_aa_open: (%d) %s\n", rc, mdbx_strerror(rc));
     goto bailout;
   }
 
@@ -63,24 +62,24 @@ int main(int argc, char *argv[]) {
   data.iov_base = sval;
 
   sprintf(sval, "%03x %d foo bar", 32, 3141592);
-  rc = mdbx_put(txn, dbi, &key, &data, 0);
+  rc = mdbx_put(txn, aah, &key, &data, 0);
   if (rc != MDBX_SUCCESS) {
     fprintf(stderr, "mdbx_put: (%d) %s\n", rc, mdbx_strerror(rc));
     goto bailout;
   }
-  rc = mdbx_txn_commit(txn);
+  rc = mdbx_tn_commit(txn);
   if (rc) {
-    fprintf(stderr, "mdbx_txn_commit: (%d) %s\n", rc, mdbx_strerror(rc));
+    fprintf(stderr, "mdbx_tn_commit: (%d) %s\n", rc, mdbx_strerror(rc));
     goto bailout;
   }
   txn = NULL;
 
-  rc = mdbx_txn_begin(env, NULL, MDBX_RDONLY, &txn);
+  rc = mdbx_tn_begin(bk, NULL, MDBX_RDONLY, &txn);
   if (rc != MDBX_SUCCESS) {
-    fprintf(stderr, "mdbx_txn_begin: (%d) %s\n", rc, mdbx_strerror(rc));
+    fprintf(stderr, "mdbx_tn_begin: (%d) %s\n", rc, mdbx_strerror(rc));
     goto bailout;
   }
-  rc = mdbx_cursor_open(txn, dbi, &cursor);
+  rc = mdbx_cursor_open(txn, aah, &cursor);
   if (rc != MDBX_SUCCESS) {
     fprintf(stderr, "mdbx_cursor_open: (%d) %s\n", rc, mdbx_strerror(rc));
     goto bailout;
@@ -103,10 +102,10 @@ bailout:
   if (cursor)
     mdbx_cursor_close(cursor);
   if (txn)
-    mdbx_txn_abort(txn);
-  if (dbi)
-    mdbx_dbi_close(env, dbi);
-  if (env)
-    mdbx_env_close(env);
+    mdbx_tn_abort(txn);
+  if (aah)
+    mdbx_aa_close(bk, aah);
+  if (bk)
+    mdbx_bk_shutdown(bk);
   return (rc != MDBX_SUCCESS) ? EXIT_FAILURE : EXIT_SUCCESS;
 }

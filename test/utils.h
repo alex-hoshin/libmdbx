@@ -100,7 +100,7 @@
 #ifdef __bswap_64
 #define bswap64(v) __bswap_64(v)
 #else
-static __inline uint64_t bswap64(uint64_t v) {
+static inline uint64_t bswap64(uint64_t v) {
   return v << 56 | v >> 56 | ((v << 40) & UINT64_C(0x00ff000000000000)) |
          ((v << 24) & UINT64_C(0x0000ff0000000000)) |
          ((v << 8) & UINT64_C(0x000000ff00000000)) |
@@ -115,7 +115,7 @@ static __inline uint64_t bswap64(uint64_t v) {
 #ifdef __bswap_32
 #define bswap32(v) __bswap_32(v)
 #else
-static __inline uint32_t bswap32(uint32_t v) {
+static inline uint32_t bswap32(uint32_t v) {
   return v << 24 | v >> 24 | ((v << 8) & UINT32_C(0x00ff0000)) |
          ((v >> 8) & UINT32_C(0x0000ff00));
 }
@@ -126,7 +126,7 @@ static __inline uint32_t bswap32(uint32_t v) {
 #ifdef __bswap_16
 #define bswap16(v) __bswap_16(v)
 #else
-static __inline uint16_t bswap16(uint16_t v) { return v << 8 | v >> 8; }
+static inline uint16_t bswap16(uint16_t v) { return v << 8 | v >> 8; }
 #endif
 #endif /* bswap16 */
 
@@ -177,7 +177,7 @@ static __inline uint16_t bswap16(uint16_t v) { return v << 8 | v >> 8; }
 
 namespace unaligned {
 
-template <typename T> static __inline T load(const void *ptr) {
+template <typename T> static inline T load(const void *ptr) {
 #if defined(_MSC_VER) &&                                                       \
     (defined(_M_ARM64) || defined(_M_X64) || defined(_M_IA64))
   return *(const T __unaligned *)ptr;
@@ -194,7 +194,7 @@ template <typename T> static __inline T load(const void *ptr) {
 #endif /* UNALIGNED_OK */
 }
 
-template <typename T> static __inline void store(void *ptr, const T &value) {
+template <typename T> static inline void store(void *ptr, const T &value) {
 #if defined(_MSC_VER) &&                                                       \
     (defined(_M_ARM64) || defined(_M_X64) || defined(_M_IA64))
   *((T __unaligned *)ptr) = value;
@@ -214,25 +214,25 @@ template <typename T> static __inline void store(void *ptr, const T &value) {
 //-----------------------------------------------------------------------------
 
 #ifndef rot64
-static __inline uint64_t rot64(uint64_t v, unsigned s) {
+static inline uint64_t rot64(uint64_t v, unsigned s) {
   return (v >> s) | (v << (64 - s));
 }
 #endif /* rot64 */
 
 #ifndef mul_32x32_64
-static __inline uint64_t mul_32x32_64(uint32_t a, uint32_t b) {
+static inline uint64_t mul_32x32_64(uint32_t a, uint32_t b) {
   return a * (uint64_t)b;
 }
 #endif /* mul_32x32_64 */
 
 #ifndef mul_64x64_128
 
-static __inline unsigned add_with_carry(uint64_t *sum, uint64_t addend) {
+static inline unsigned add_with_carry(uint64_t *sum, uint64_t addend) {
   *sum += addend;
   return (*sum < addend) ? 1u : 0u;
 }
 
-static __inline uint64_t mul_64x64_128(uint64_t a, uint64_t b, uint64_t *h) {
+static inline uint64_t mul_64x64_128(uint64_t a, uint64_t b, uint64_t *h) {
 #if defined(__SIZEOF_INT128__) ||                                              \
     (defined(_INTEGRAL_MAX_BITS) && _INTEGRAL_MAX_BITS >= 128)
   __uint128_t r = (__uint128_t)a * (__uint128_t)b;
@@ -256,23 +256,23 @@ static __inline uint64_t mul_64x64_128(uint64_t a, uint64_t b, uint64_t *h) {
 #endif /* mul_64x64_128() */
 
 #ifndef mul_64x64_high
-static __inline uint64_t mul_64x64_high(uint64_t a, uint64_t b) {
+static inline uint64_t mul_64x64_high(uint64_t a, uint64_t b) {
   uint64_t h;
   mul_64x64_128(a, b, &h);
   return h;
 }
 #endif /* mul_64x64_high */
 
-static __inline bool is_power2(size_t x) { return (x & (x - 1)) == 0; }
+static inline bool is_power2(size_t x) { return (x & (x - 1)) == 0; }
 
-static __inline size_t roundup2(size_t value, size_t granularity) {
+static inline size_t roundup2(size_t value, size_t granularity) {
   assert(is_power2(granularity));
   return (value + granularity - 1) & ~(granularity - 1);
 }
 
 //-----------------------------------------------------------------------------
 
-static __inline void memory_barrier(void) {
+static inline void memory_barrier(void) {
 #if __has_extension(c_atomic) || __has_extension(cxx_atomic)
   __c11_atomic_thread_fence(__ATOMIC_SEQ_CST);
 #elif defined(__ATOMIC_SEQ_CST)
@@ -302,7 +302,7 @@ static __inline void memory_barrier(void) {
 #endif
 }
 
-static __inline void cpu_relax() {
+static inline void cpu_relax() {
 #if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) ||            \
     defined(_M_X64)
   _mm_pause();
